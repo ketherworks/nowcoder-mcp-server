@@ -1,6 +1,6 @@
 {
   "name": "@ketherworks/nowcoder-oj-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -13,6 +13,7 @@
     "dist/index.d.ts",
     "dist/index.d.ts.map",
     "README.md",
+    "README.zh-CN.md",
     "LICENSE"
   ],
   "scripts": {
@@ -33,7 +34,7 @@
     "node": ">=22"
   },
   "license": "MIT",
-  "description": "Hardened local MCP server for public NowCoder ACM problem pages.",
+  "description": "Hardened local MCP server for allowlisted NowCoder ACM problem pages.",
   "author": "Kether Works contributors",
   "repository": {
     "type": "git",

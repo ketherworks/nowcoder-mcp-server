@@ -1,9 +1,11 @@
 # NowCoder ACM Problem MCP Server
 
-Hardened local MCP server for public NowCoder ACM problem pages.
+[简体中文](README.zh-CN.md)
+
+Hardened local MCP server for allowlisted NowCoder ACM problem pages.
 
 This is a standalone release workspace generated from the audited
-[Kether Works OJ adapter source](https://github.com/ketherworks/oj-mcp-adapters/tree/3f7ee0e040d76f6dd5460d5926d8504c8cb20256/packages/nowcoder).
+[Kether Works OJ adapter source](https://github.com/ketherworks/oj-mcp-adapters/tree/b23d435a4840f798e93c879a9e4f543529056a26/packages/nowcoder).
 The release package bundles the shared OJ contract implementation, so its runtime does not depend
 on unpublished workspace packages.
 
@@ -12,6 +14,7 @@ on unpublished workspace packages.
 - `oj_capabilities`
 - `oj_health`
 - `oj_fetch_problem`
+- `nowcoder_auth_status`
 
 ## Local Stdio
 
@@ -44,9 +47,12 @@ publication are intentionally separate steps and are not claimed until their own
 ## Policy
 
 This project is unofficial and is not affiliated with or endorsed by NowCoder.
-It never bypasses anti-bot challenges and intentionally remains local stdio only.
+It supports an optional startup-injected local session, never bypasses anti-bot challenges, and
+intentionally remains local stdio only.
 
-The server exposes no run or submit tool. It accepts no judge account credentials. See
+The server exposes no run or submit tool. The server accepts an optional NowCoder Cookie only from `NOWCODER_SESSION_COOKIE` at local
+stdio process startup. Inject it from a trusted secret manager; never put it in tool arguments,
+MCP configuration files, command-line arguments, logs, or committed files. See
 [SECURITY.md](SECURITY.md) for the security boundary and [PROVENANCE.md](PROVENANCE.md) for the
 canonical source revision.
 
