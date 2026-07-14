@@ -3,7 +3,7 @@
 This standalone workspace is generated from:
 
 - Repository: https://github.com/ketherworks/oj-mcp-adapters
-- Commit: `b23d435a4840f798e93c879a9e4f543529056a26`
+- Commit: `a607a9e450b5855cf8fee8b5304a8546153b2d5e`
 - Provider source: `packages/nowcoder`
 - Shared contract source: `packages/contracts`
 - Shared MCP result helpers: `packages/server-common`

@@ -34,7 +34,7 @@
     "node": ">=22"
   },
   "license": "MIT",
-  "description": "Hardened local MCP server for allowlisted NowCoder ACM problem pages.",
+  "description": "Local NowCoder ACM MCP server for search, import, profiles, runs, submissions, and judging.",
   "author": "Kether Works contributors",
   "repository": {
     "type": "git",
@@ -51,6 +51,6 @@
     "mcp",
     "model-context-protocol",
     "online-judge",
-    "read-only"
+    "competitive-programming-tools"
   ]
 }

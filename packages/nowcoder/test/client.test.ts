@@ -26,6 +26,174 @@ describe("NowCoderPageClient", () => {
     expect(calls).toEqual(["https://ac.nowcoder.com/acm/problem/218144"]);
   });
 
+  test("fetches one bounded official problem-search page", async () => {
+    const html = await loadFixture("problem-list.html");
+    const observed: Array<{ url: string; sessionCookie?: string }> = [];
+    const client = new NowCoderPageClient({
+      sessionCookie: "NOWCODER_SESSION=search-secret",
+      requester: async (url, context) => {
+        observed.push({ url: url.href, sessionCookie: context.sessionCookie });
+        return response(200, html, { "content-type": "text/html" });
+      }
+    });
+
+    await expect(client.getProblemListPage({ query: "二分", page: 2, limit: 20 })).resolves.toEqual({
+      html,
+      url: "https://ac.nowcoder.com/acm/problem/list?keyword=%E4%BA%8C%E5%88%86&page=2&pageSize=20&order=id&asc=false&difficulty=0&platformTagId=0&sourceTagId=0&status=all&tagId="
+    });
+    expect(observed).toEqual([{
+      url: "https://ac.nowcoder.com/acm/problem/list?keyword=%E4%BA%8C%E5%88%86&page=2&pageSize=20&order=id&asc=false&difficulty=0&platformTagId=0&sourceTagId=0&status=all&tagId=",
+      sessionCookie: "NOWCODER_SESSION=search-secret"
+    }]);
+  });
+
+  test("resolves the signed-in competition profile and fetches its bounded page", async () => {
+    const profile = await loadFixture("profile.html");
+    const observed: string[] = [];
+    const client = new NowCoderPageClient({
+      sessionCookie: "NOWCODER_SESSION=profile-secret",
+      requester: async (requestUrl) => {
+        observed.push(requestUrl.href);
+        if (requestUrl.pathname === "/") {
+          return response(200, '<script>window.isLogin=true; window.globalInfo={ownerId:"886965097"};</script>', { "content-type": "text/html" });
+        }
+        return response(200, profile, { "content-type": "text/html" });
+      }
+    });
+
+    await expect(client.getProfilePage()).resolves.toEqual({
+      accountId: "886965097",
+      html: profile,
+      url: "https://ac.nowcoder.com/acm/contest/profile/886965097"
+    });
+    expect(observed).toEqual([
+      "https://ac.nowcoder.com/",
+      "https://ac.nowcoder.com/acm/contest/profile/886965097"
+    ]);
+  });
+
+  test("fetches one bounded server-rendered submission page", async () => {
+    const html = await loadFixture("submissions.html");
+    const requested: string[] = [];
+    const client = new NowCoderPageClient({ requester: async (requestUrl) => {
+      requested.push(requestUrl.href);
+      return response(200, html, { "content-type": "text/html" });
+    } });
+
+    await expect(client.getSubmissionsPage({
+      accountId: "776966013",
+      page: 2,
+      limit: 20,
+      query: "魔咒"
+    })).resolves.toEqual({
+      accountId: "776966013",
+      html,
+      url: "https://ac.nowcoder.com/acm/contest/profile/776966013/practice-coding?pageSize=20&search=%E9%AD%94%E5%92%92&statusTypeFilter=-1&languageCategoryFilter=-1&orderType=DESC&page=2"
+    });
+    expect(requested).toEqual([
+      "https://ac.nowcoder.com/acm/contest/profile/776966013/practice-coding?pageSize=20&search=%E9%AD%94%E5%92%92&statusTypeFilter=-1&languageCategoryFilter=-1&orderType=DESC&page=2"
+    ]);
+  });
+
+  test("uses the audited token, submit, and poll requests without exposing credentials", async () => {
+    const observed: Array<{ url: string; method?: string; body?: string; headers?: Readonly<Record<string, string>>; cookie?: string }> = [];
+    const sessionCookie = [
+      "csrf_token=csrf-secret",
+      "NOWCODER_SESSION=nowcoder-session-secret",
+      "NOWCODER_DEVICE=nowcoder-device-secret",
+      "session=ac-session-secret",
+      "token=ac-token-secret"
+    ].join("; ");
+    const client = new NowCoderPageClient({
+      sessionCookie,
+      requester: async (requestUrl, context) => {
+        observed.push({
+          url: requestUrl.href,
+          method: context.method,
+          body: context.body,
+          headers: context.headers,
+          cookie: context.sessionCookie
+        });
+        if (requestUrl.hostname === "gw-c.nowcoder.com") {
+          return response(200, JSON.stringify({ success: true, code: 0, data: { accessToken: "Bearer short-token" } }), { "content-type": "application/json" });
+        }
+        if (requestUrl.pathname.endsWith("/submit")) {
+          return response(200, JSON.stringify({ code: 0, msg: "OK", data: { id: "90001", submissionId: "90001" } }), { "content-type": "application/json" });
+        }
+        return response(200, JSON.stringify({ code: 0, msg: "OK", data: { status: 5, submissionId: "90001" } }), { "content-type": "application/json" });
+      }
+    });
+
+    const token = await client.obtainJudgeAccessToken({ teamId: "42" });
+    const submitted = await client.submitJudge({ content: "int main(){}", token, id: "payload" });
+    const status = await client.pollJudge({ id: submitted.id!, userId: "123", appId: 6, tagId: 4, submitType: 1, remark: "{}", token, showId: 6, content: "must-not-enter-query" });
+
+    expect(token).toBe("short-token");
+    expect(status).toMatchObject({ status: 5, submissionId: "90001" });
+    expect(observed).toHaveLength(3);
+    expect(observed[0]).toMatchObject({
+      method: "GET",
+      cookie: "csrf_token=csrf-secret; NOWCODER_SESSION=nowcoder-session-secret; NOWCODER_DEVICE=nowcoder-device-secret"
+    });
+    expect(observed[0]!.url).toContain("sceneType=2");
+    expect(observed[0]!.url).toContain("token=csrf-secret");
+    expect(observed[0]!.url).toContain("teamId=42");
+    expect(observed[0]!.headers).toMatchObject({ Origin: "https://d.nowcoder.com", Referer: "https://d.nowcoder.com/" });
+    expect(observed[0]!.cookie).not.toContain("ac-session-secret");
+    expect(observed[0]!.cookie).not.toContain("ac-token-secret");
+    expect(Object.keys(observed[0]!.headers ?? {}).map((name) => name.toLowerCase())).not.toContain("cookie");
+    expect(observed[1]).toMatchObject({
+      method: "POST",
+      cookie: undefined,
+      headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" }
+    });
+    expect(Object.keys(observed[1]!.headers ?? {}).map((name) => name.toLowerCase())).not.toContain("cookie");
+    expect(observed[2]).toMatchObject({ method: "GET", cookie: undefined });
+    expect(Object.keys(observed[2]!.headers ?? {}).map((name) => name.toLowerCase())).not.toContain("cookie");
+    expect(observed[2]!.url).toContain("token=short-token");
+    expect(observed[2]!.url).not.toContain("must-not-enter-query");
+    const output = JSON.stringify({ token, submitted, status });
+    for (const secret of ["csrf-secret", "nowcoder-session-secret", "nowcoder-device-secret", "ac-session-secret", "ac-token-secret"]) {
+      expect(output).not.toContain(secret);
+    }
+  });
+
+  test("reads per-problem judge language IDs from question metadata", async () => {
+    const requested: Array<{ url: string; method?: string; headers?: Readonly<Record<string, string>>; cookie?: string }> = [];
+    const client = new NowCoderPageClient({
+      sessionCookie: "csrf_token=csrf-secret; NOWCODER_SESSION=nowcoder-secret; session=ac-session-secret",
+      requester: async (requestUrl, context) => {
+        requested.push({
+          url: requestUrl.href,
+          method: context.method,
+          headers: context.headers,
+          cookie: context.sessionCookie
+        });
+        return response(200, JSON.stringify({
+          code: 0,
+          data: { codingInfo: { supportLanguages: [{ langId: 1 }, { langId: 2 }, { langId: "11" }] } }
+        }), { "content-type": "application/json" });
+      }
+    });
+
+    const languages = await client.getQuestionSupportLanguageIds("1338275");
+    expect(languages).toEqual(["1", "2", "11"]);
+    expect(requested).toEqual([
+      {
+        url: "https://questionbank.nowcoder.com/api/qmp/question/detail?id=1338275&version=3&sceneType=3001",
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          "X-Requested-With": "XMLHttpRequest",
+          Origin: "https://ac.nowcoder.com",
+          Referer: "https://ac.nowcoder.com/"
+        },
+        cookie: undefined
+      }
+    ]);
+    expect(JSON.stringify(languages)).not.toMatch(/csrf-secret|nowcoder-secret|ac-session-secret/);
+  });
+
   test("attaches an opaque local session only to an allowlisted NowCoder request", async () => {
     const html = await loadFixture("acm-problem.html");
     const observed: Array<{ url: string; sessionCookie?: string }> = [];
@@ -43,6 +211,60 @@ describe("NowCoderPageClient", () => {
       url: "https://ac.nowcoder.com/acm/problem/218144",
       sessionCookie: "NOWCODER_SESSION=secret-value; token=second-secret"
     }]);
+  });
+
+  test.each([
+    {
+      endpoint: "ac.nowcoder.com page",
+      expectedCookie: "csrf_token=csrf-secret; NOWCODER_SESSION=nowcoder-secret; session=ac-session-secret",
+      request: (client: NowCoderPageClient) => client.getProblemPage("https://ac.nowcoder.com/acm/problem/218144")
+    },
+    {
+      endpoint: "gw-c access token",
+      expectedCookie: "csrf_token=csrf-secret; NOWCODER_SESSION=nowcoder-secret",
+      request: (client: NowCoderPageClient) => client.obtainJudgeAccessToken()
+    },
+    {
+      endpoint: "questionbank metadata",
+      expectedCookie: undefined,
+      request: (client: NowCoderPageClient) => client.getQuestionSupportLanguageIds("1338275")
+    },
+    {
+      endpoint: "victorinox submit",
+      expectedCookie: undefined,
+      request: (client: NowCoderPageClient) => client.submitJudge({ id: "payload", token: "judge-token" })
+    },
+    {
+      endpoint: "victorinox poll",
+      expectedCookie: undefined,
+      request: (client: NowCoderPageClient) => client.pollJudge({ id: "90001", token: "judge-token" })
+    }
+  ])("keeps $endpoint request errors free of startup-cookie secrets", async ({ expectedCookie, request }) => {
+    const sessionCookie = "csrf_token=csrf-secret; NOWCODER_SESSION=nowcoder-secret; session=ac-session-secret";
+    const contexts: Array<{ sessionCookie?: string; headers?: Readonly<Record<string, string>> }> = [];
+    const client = new NowCoderPageClient({
+      sessionCookie,
+      requester: async (_url, context) => {
+        contexts.push({ sessionCookie: context.sessionCookie, headers: context.headers });
+        return response(500, sessionCookie, { "content-type": "text/plain" });
+      }
+    });
+
+    let thrown: unknown;
+    try {
+      await request(client);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]?.sessionCookie).toBe(expectedCookie);
+    expect(Object.keys(contexts[0]?.headers ?? {}).map((name) => name.toLowerCase())).not.toContain("cookie");
+    expect(thrown).toMatchObject({ code: "upstream.unavailable" });
+    const visibleError = `${String(thrown)} ${JSON.stringify(thrown)}`;
+    for (const secret of ["csrf-secret", "nowcoder-secret", "ac-session-secret"]) {
+      expect(visibleError).not.toContain(secret);
+    }
   });
 
   test.each([
@@ -85,7 +307,7 @@ describe("NowCoderPageClient", () => {
       sessionCookie: "NOWCODER_SESSION=secret-value",
       requester: async (url, context) => {
         requests.push({ url: url.href, sessionCookie: context.sessionCookie });
-        return response(200, "<script>window.isLogin = true;</script>", { "content-type": "text/html" });
+        return response(200, '<script>window.isLogin = true; window.globalInfo = { ownerId: "123456789" };</script>', { "content-type": "text/html" });
       }
     });
 
