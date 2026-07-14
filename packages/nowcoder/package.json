@@ -1,0 +1,55 @@
+{
+  "name": "@ketherworks/nowcoder-oj-mcp",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "nowcoder-mcp-server": "dist/index.js"
+  },
+  "files": [
+    "dist/index.js",
+    "dist/index.js.map",
+    "dist/index.d.ts",
+    "dist/index.d.ts.map",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "build": "npm run clean && tsc -b tsconfig.json && node ../../scripts/bundle-platform.mjs nowcoder && node scripts/prepare-bin.mjs",
+    "typecheck": "npm run clean && tsc -b tsconfig.json",
+    "typecheck:test": "npm run typecheck && tsc -p tsconfig.test.json",
+    "prepack": "npm run build && node scripts/verify-package.mjs",
+    "pack:check": "npm pack --dry-run",
+    "start": "node dist/index.js",
+    "test": "vitest run --config vitest.config.ts test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "zod": "4.3.6"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT",
+  "description": "Hardened local MCP server for public NowCoder ACM problem pages.",
+  "author": "Kether Works contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ketherworks/nowcoder-oj-mcp.git"
+  },
+  "homepage": "https://github.com/ketherworks/nowcoder-oj-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/ketherworks/nowcoder-oj-mcp/issues"
+  },
+  "mcpName": "io.github.ketherworks/nowcoder-oj-mcp",
+  "keywords": [
+    "nowcoder",
+    "competitive-programming",
+    "mcp",
+    "model-context-protocol",
+    "online-judge",
+    "read-only"
+  ]
+}

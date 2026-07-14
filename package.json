@@ -1,0 +1,28 @@
+{
+  "name": "nowcoder-mcp-server-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "clean": "tsc -b --clean",
+    "build": "tsc -b",
+    "postbuild": "node scripts/bundle-platform.mjs nowcoder",
+    "test": "vitest run",
+    "check": "npm run clean && npm run build && npm test",
+    "pack:check": "npm run pack:check --workspace @ketherworks/nowcoder-oj-mcp",
+    "release:verify-tag": "node scripts/verify-release-tag.mjs",
+    "release:pack": "npm pack --json --pack-destination release --workspace @ketherworks/nowcoder-oj-mcp"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.3",
+    "esbuild": "0.28.1",
+    "typescript": "5.8.3",
+    "vitest": "4.1.10"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
