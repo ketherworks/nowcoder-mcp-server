@@ -34,17 +34,17 @@
     "node": ">=22"
   },
   "license": "MIT",
-  "description": "Local NowCoder ACM MCP server for search, import, profiles, runs, submissions, and judging.",
+  "description": "牛客题库搜索、导题、运行与提交的本地 MCP Server | NowCoder MCP for AI coding agents.",
   "author": "Kether Works contributors",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ketherworks/nowcoder-oj-mcp.git"
+    "url": "git+https://github.com/ketherworks/nowcoder-mcp-server.git"
   },
-  "homepage": "https://github.com/ketherworks/nowcoder-oj-mcp#readme",
+  "homepage": "https://github.com/ketherworks/nowcoder-mcp-server#readme",
   "bugs": {
-    "url": "https://github.com/ketherworks/nowcoder-oj-mcp/issues"
+    "url": "https://github.com/ketherworks/nowcoder-mcp-server/issues"
   },
-  "mcpName": "io.github.ketherworks/nowcoder-oj-mcp",
+  "mcpName": "io.github.ketherworks/nowcoder-mcp-server",
   "keywords": [
     "nowcoder",
     "competitive-programming",

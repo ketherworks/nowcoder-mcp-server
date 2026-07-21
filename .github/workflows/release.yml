@@ -26,4 +26,4 @@ jobs:
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" release/*.tgz --verify-tag --generate-notes --title "NowCoder ACM Problem MCP Server ${GITHUB_REF_NAME}"
+        run: gh release create "${GITHUB_REF_NAME}" release/*.tgz --verify-tag --generate-notes --title "NowCoder MCP Server | 牛客 MCP Server ${GITHUB_REF_NAME}"
