@@ -1,7 +1,7 @@
 # Security Policy
 
 Report vulnerabilities through the private GitHub Security Advisory form for
-`ketherworks/nowcoder-oj-mcp`. Do not include judge cookies, account tokens, source code,
+`ketherworks/nowcoder-mcp-server`. Do not include judge cookies, account tokens, source code,
 or other secrets in a public issue.
 
 The server runs as a local stdio process. It reads the complete Cookie from
