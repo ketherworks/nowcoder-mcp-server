@@ -443,6 +443,8 @@ describe("NowCoder MCP server", () => {
         retryAfterMs: 4000
       }
     });
+    const textContent = (result.content as Array<{ type: string; text: string }>).find((item) => item.type === "text");
+    expect(JSON.parse(textContent!.text)).toEqual(result.structuredContent);
 
     await client.close();
     await server.close();
