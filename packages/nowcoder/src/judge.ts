@@ -16,6 +16,7 @@ import {
   type OjSourceRef,
   type OjVerdict
 } from "@kaiserunix/oj-mcp-contracts";
+import { formatSchemaValidationError } from "@kaiserunix/oj-mcp-server-common";
 import { safeConfirmationValue, verifySavedCodeArtifact, type NowCoderArtifactVerifier } from "./artifact.js";
 import { NowCoderAdapterError } from "./errors.js";
 
@@ -159,11 +160,25 @@ export class NowCoderJudgeService {
   async prepareSubmission(input: OjPrepareSubmissionRequest, signal?: AbortSignal): Promise<OjSubmitPreview> {
     this.purgeExpiredState();
     const parsed = ojPrepareSubmissionRequestSchema.safeParse(input);
-    if (!parsed.success || parsed.data.providerId !== PROVIDER_ID || parsed.data.problem.platform !== "nowcoder") {
-      throw new NowCoderAdapterError("request.invalid", "Prepare a NowCoder submission with a valid immutable code artifact.");
+    if (!parsed.success) {
+      throw new NowCoderAdapterError(
+        "request.invalid",
+        formatSchemaValidationError("oj_prepare_submission", parsed.error, {
+          hint: "Verify providerId is 'nowcoder-public-page', problem.platform is 'nowcoder', and code.sha256 / code.bytes match the saved UTF-8 file."
+        })
+      );
+    }
+    if (parsed.data.providerId !== PROVIDER_ID || parsed.data.problem.platform !== "nowcoder") {
+      throw new NowCoderAdapterError(
+        "request.invalid",
+        "Cannot prepare NowCoder submission: verify providerId is 'nowcoder-public-page' and problem.platform is 'nowcoder'."
+      );
     }
     if (!LANGUAGE_IDS.has(parsed.data.platformLanguageId)) {
-      throw new NowCoderAdapterError("language.unsupported", "NowCoder does not expose this language ID for the audited ACM editor.");
+      throw new NowCoderAdapterError(
+        "language.unsupported",
+        `Unsupported NowCoder language ID '${parsed.data.platformLanguageId}'. Call oj_capabilities for valid IDs (e.g., '2' for C++, '4' for Java, '11' for Python 3, '25' for PyPy 3).`
+      );
     }
     if (parsed.data.code.bytes > 1024 * 1024) {
       throw new NowCoderAdapterError("request.invalid", "NowCoder submission source must not exceed 1 MiB.");
@@ -173,10 +188,16 @@ export class NowCoderJudgeService {
     const verified = await this.verifyArtifact(parsed.data.code, signal);
     const context = await this.gateway.prepareContext(parsed.data.problem.url, parsed.data.accountId, signal);
     if (context.accountId !== parsed.data.accountId) {
-      throw new NowCoderAdapterError("auth.forbidden", "The requested NowCoder account does not match the signed-in account.");
+      throw new NowCoderAdapterError(
+        "auth.forbidden",
+        `Account ID mismatch: your signed-in NowCoder session belongs to account '${context.accountId}', not '${parsed.data.accountId}'. Call oj_fetch_profile({}) with no arguments to inspect your active account ID.`
+      );
     }
     if (!context.supportedLanguageIds.includes(parsed.data.platformLanguageId)) {
-      throw new NowCoderAdapterError("language.unsupported", "This NowCoder problem does not accept the selected language ID.");
+      throw new NowCoderAdapterError(
+        "language.unsupported",
+        `This NowCoder problem does not accept language ID '${parsed.data.platformLanguageId}'. Supported IDs: ${context.supportedLanguageIds.slice(0, 10).join(", ")}.`
+      );
     }
     assertProblemMatch(parsed.data.problem, context.problem);
 
@@ -229,7 +250,12 @@ export class NowCoderJudgeService {
   async commitSubmission(input: OjSubmitCommitRequest, authorized: boolean, signal?: AbortSignal): Promise<OjSubmitResult> {
     const parsed = ojSubmitCommitRequestSchema.safeParse(input);
     if (!parsed.success) {
-      throw new NowCoderAdapterError("request.invalid", "Commit input did not match the prepared submission contract.");
+      throw new NowCoderAdapterError(
+        "request.invalid",
+        formatSchemaValidationError("oj_commit_submission", parsed.error, {
+          hint: "Pass schemaVersion: 'oj.submit-commit/v1', requestId, intentId, submissionOperationId, codeArtifactId, and codeSha256 from oj_prepare_submission."
+        })
+      );
     }
     if (!authorized) {
       throw new NowCoderAdapterError("confirmation.required", "Explicit user confirmation is required for every real submission.");
@@ -361,8 +387,19 @@ export class NowCoderJudgeService {
   async preparePlatformRun(input: OjRunRequest, signal?: AbortSignal): Promise<NowCoderPlatformRunPreview> {
     this.purgeExpiredState();
     const parsed = ojRunRequestSchema.safeParse(input);
-    if (!parsed.success || parsed.data.problem.platform !== "nowcoder" || parsed.data.mode !== "platform") {
-      throw new NowCoderAdapterError("request.invalid", "Run a valid immutable code artifact against one NowCoder sample.");
+    if (!parsed.success) {
+      throw new NowCoderAdapterError(
+        "request.invalid",
+        formatSchemaValidationError("oj_platform_run", parsed.error, {
+          hint: "Pass schemaVersion: 'oj.run-request/v1', mode: 'platform', problem.platform: 'nowcoder', and a valid saved code artifact."
+        })
+      );
+    }
+    if (parsed.data.problem.platform !== "nowcoder" || parsed.data.mode !== "platform") {
+      throw new NowCoderAdapterError(
+        "request.invalid",
+        "Cannot prepare NowCoder platform run: verify mode is 'platform' and problem.platform is 'nowcoder'."
+      );
     }
     if (this.runJobs.has(parsed.data.requestId) || this.reservedRunRequestIds.has(parsed.data.requestId)) {
       throw new NowCoderAdapterError("policy.blocked", "This platform-run requestId was already prepared or dispatched; use oj_poll_run after dispatch.");
@@ -370,7 +407,12 @@ export class NowCoderJudgeService {
     this.reservedRunRequestIds.add(parsed.data.requestId);
     try {
     const languageId = parsed.data.code.platformLanguageId;
-    if (!languageId || !LANGUAGE_IDS.has(languageId)) throw new NowCoderAdapterError("language.unsupported", "NowCoder does not expose this language ID for the audited ACM editor.");
+    if (!languageId || !LANGUAGE_IDS.has(languageId)) {
+      throw new NowCoderAdapterError(
+        "language.unsupported",
+        `Unsupported NowCoder language ID '${languageId ?? ""}'. Call oj_capabilities for valid IDs (e.g., '2' for C++, '4' for Java, '11' for Python 3, '25' for PyPy 3).`
+      );
+    }
     if (parsed.data.code.bytes > 1024 * 1024) throw new NowCoderAdapterError("request.invalid", "NowCoder run source must not exceed 1 MiB.");
     assertCodeHash(parsed.data.code.source, parsed.data.code.sha256);
     safeConfirmationValue(parsed.data.code.languageKey, "Language name");

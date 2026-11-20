@@ -21,6 +21,7 @@ import {
   type OjRunResult,
   type OjSourceRef
 } from "@kaiserunix/oj-mcp-contracts";
+import { formatSchemaValidationError } from "@kaiserunix/oj-mcp-server-common";
 import { z } from "zod";
 import { authStatusMessage, nowCoderAuthStatusSchema, type NowCoderAuthStatus } from "./auth.js";
 import { NowCoderPageClient } from "./client.js";
@@ -126,15 +127,16 @@ export class NowCoderProvider {
 
   async search(input: OjSearchRequest, options: { signal?: AbortSignal } = {}): Promise<OjSearchResult> {
     const startedAt = this.now();
-    let request: z.infer<typeof nowCoderSearchInputSchema>;
-    try {
-      request = nowCoderSearchInputSchema.parse(input);
-    } catch {
+    const parsed = nowCoderSearchInputSchema.safeParse(input);
+    if (!parsed.success) {
       throw new NowCoderAdapterError(
         "request.invalid",
-        "Use a bounded NowCoder search request with a 1-300 character query, optional page cursor, and limit 1-50."
+        formatSchemaValidationError("oj_search_problems", parsed.error, {
+          hint: 'Expected { schemaVersion: "oj.search-request/v1", requestId, platform: "nowcoder", query (1-300 chars), limit (1-50), optional cursor ("1"-"9999") and locale: "zh-CN" }.'
+        })
       );
     }
+    const request = parsed.data;
 
     try {
       const pageNumber = request.cursor === undefined ? 1 : Number(request.cursor);
@@ -171,7 +173,12 @@ export class NowCoderProvider {
   ): Promise<NowCoderProfile> {
     const parsed = nowCoderProfileInputSchema.safeParse(input);
     if (!parsed.success) {
-      throw new NowCoderAdapterError("request.invalid", "Use a positive numeric NowCoder accountId or omit it for the signed-in account.");
+      throw new NowCoderAdapterError(
+        "request.invalid",
+        formatSchemaValidationError("oj_fetch_profile", parsed.error, {
+          hint: "Pass a positive numeric accountId (e.g., \"886965097\") or {} for the signed-in account."
+        })
+      );
     }
     const startedAt = this.now();
     try {
@@ -197,7 +204,12 @@ export class NowCoderProvider {
   ): Promise<NowCoderSubmissionList> {
     const parsed = nowCoderSubmissionsInputSchema.safeParse(input);
     if (!parsed.success) {
-      throw new NowCoderAdapterError("request.invalid", "Use a valid accountId, optional query and page cursor, and limit 1-50.");
+      throw new NowCoderAdapterError(
+        "request.invalid",
+        formatSchemaValidationError("oj_list_submissions", parsed.error, {
+          hint: "Pass optional numeric accountId, query (<=100 chars), numeric page cursor, and limit 1-50."
+        })
+      );
     }
     const startedAt = this.now();
     try {
@@ -242,8 +254,8 @@ export class NowCoderProvider {
     return this.importer.open(input);
   }
 
-  async completeImport(windowId: string): Promise<OjImportPreview> {
-    return this.importer.complete(windowId);
+  async completeImport(windowId: string, signal?: AbortSignal): Promise<OjImportPreview> {
+    return this.importer.complete(windowId, signal);
   }
 
   async dispose(): Promise<void> {
