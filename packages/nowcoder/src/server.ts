@@ -20,7 +20,12 @@ import {
   type OjError,
   type OjErrorCode
 } from "@kaiserunix/oj-mcp-contracts";
-import { toOjToolOutputSchema, toToolError, toToolResult } from "@kaiserunix/oj-mcp-server-common";
+import {
+  formatSchemaValidationError,
+  toOjToolOutputSchema,
+  toToolError,
+  toToolResult
+} from "@kaiserunix/oj-mcp-server-common";
 import { z } from "zod";
 import { nowCoderAuthStatusSchema } from "./auth.js";
 import { safeConfirmationValue } from "./artifact.js";
@@ -230,7 +235,7 @@ export function createNowCoderMcpServer(options: { provider?: NowCoderProvider }
         case "oj_open_import_window":
           return provider.openImportWindow(parseInput(ojImportWindowRequestSchema, input, request.params.name));
         case "oj_complete_import":
-          return provider.completeImport(parseInput(completeImportInputSchema, input, request.params.name).windowId);
+          return provider.completeImport(parseInput(completeImportInputSchema, input, request.params.name).windowId, extra.signal);
         case "oj_fetch_profile":
           return provider.fetchProfile(parseInput(nowCoderProfileInputSchema, input, request.params.name), {
             signal: extra.signal
@@ -267,7 +272,10 @@ export function createNowCoderMcpServer(options: { provider?: NowCoderProvider }
         case "oj_poll_run":
           return provider.pollPlatformRun(parseInput(pollRunInputSchema, input, request.params.name), extra.signal);
         default:
-          throw new NowCoderAdapterError("request.invalid", "Unknown NowCoder tool name.");
+          throw new NowCoderAdapterError(
+            "request.invalid",
+            `Unknown NowCoder tool. Call one of: ${NOWCODER_MCP_TOOL_NAMES.join(", ")}.`
+          );
       }
     }, extra.signal);
   });
@@ -298,10 +306,30 @@ function tool(
   };
 }
 
-function parseInput<T>(schema: z.ZodType<T>, input: unknown, toolName: string): T {
+const TOOL_VALIDATION_HINTS: Record<(typeof NOWCODER_MCP_TOOL_NAMES)[number], string> = {
+  oj_capabilities: "This tool takes an empty object {}.",
+  oj_health: "This tool takes an empty object {}.",
+  nowcoder_auth_status: "This tool takes an empty object {}.",
+  oj_fetch_problem: 'Provide exactly one of { url: "https://ac.nowcoder.com/acm/problem/<id>" } or { nativeId: "NC218144" | "<contest>/<index>" }.',
+  oj_search_problems: 'Expected { schemaVersion: "oj.search-request/v1", requestId, platform: "nowcoder", query (1-300 chars), limit (1-50), optional cursor and locale: "zh-CN" }.',
+  oj_open_import_window: 'Expected { schemaVersion: "oj.import-window-request/v1", requestId, allowedPlatforms: ["nowcoder"], expiresInMs (1-60000) }.',
+  oj_complete_import: "Expected { windowId } returned by oj_open_import_window.",
+  oj_fetch_profile: 'Expected {} (signed-in account) or { accountId: "<positive-numeric-id>" }.',
+  oj_list_submissions: "Expected optional numeric accountId, query (<=100 chars), numeric page cursor, and limit 1-50.",
+  oj_prepare_submission: 'Expected schemaVersion "oj.prepare-submission/v1", providerId "nowcoder-public-page", problem.platform "nowcoder", and a saved file: code artifact (sourceWasDirty: false).',
+  oj_commit_submission: 'Expected { schemaVersion: "oj.submit-commit/v1", requestId, intentId, submissionOperationId, codeArtifactId, codeSha256 } from oj_prepare_submission.',
+  oj_poll_submission: "Expected { requestId, submissionOperationId } from a prior oj_commit_submission.",
+  oj_platform_run: 'Expected schemaVersion "oj.run-request/v1", mode "platform", problem.platform "nowcoder", and a saved file: code artifact (sourceWasDirty: false).',
+  oj_poll_run: "Expected { requestId } from a prior oj_platform_run."
+};
+
+function parseInput<T>(schema: z.ZodType<T>, input: unknown, toolName: (typeof NOWCODER_MCP_TOOL_NAMES)[number]): T {
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
-    throw new NowCoderAdapterError("request.invalid", `${toolName} input did not match its strict bounded schema.`);
+    throw new NowCoderAdapterError(
+      "request.invalid",
+      formatSchemaValidationError(toolName, parsed.error, { hint: TOOL_VALIDATION_HINTS[toolName] })
+    );
   }
   return parsed.data;
 }

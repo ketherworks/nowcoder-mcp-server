@@ -12,6 +12,7 @@ import {
   type OjProblemDocument,
   type OjSourceRef
 } from "@kaiserunix/oj-mcp-contracts";
+import { abortable } from "@kaiserunix/oj-mcp-server-common";
 import { z } from "zod";
 import { NowCoderAdapterError } from "./errors.js";
 import { resolveNowCoderProblemLocator } from "./url.js";
@@ -139,12 +140,12 @@ export class CompetitiveCompanionImporter {
     }
   }
 
-  async complete(windowId: string): Promise<OjImportPreview> {
+  async complete(windowId: string, signal?: AbortSignal): Promise<OjImportPreview> {
     const completion = this.completions.get(windowId);
     if (!completion) {
       throw new NowCoderAdapterError("resource.not_found", "Competitive Companion import window was not found.");
     }
-    const result = await completion;
+    const result = await abortable(completion, signal, "Competitive Companion import was cancelled.");
     this.completions.delete(windowId);
     const active = this.active;
     if (active?.id === windowId) await this.closeWindow(active, active.state !== "received");
